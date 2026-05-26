@@ -20,6 +20,8 @@
 #   never tokens, credentials, or session content.
 # • Zero third-party dependencies — stdlib only.
 
+from __future__ import annotations
+
 import glob
 import json
 import os

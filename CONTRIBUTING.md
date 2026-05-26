@@ -18,7 +18,7 @@ Thank you for considering a contribution!
 ```bash
 git clone https://github.com/jdetras/claude-swiftbar.git
 cd claude-swiftbar
-pip install pytest ruff mypy bandit
+pip install pytest ruff mypy bandit  # Python 3.9.6+ required
 ```
 
 ## Running checks locally

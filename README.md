@@ -4,7 +4,7 @@ A macOS SwiftBar / xbar menu bar plugin that shows your **Claude Code** session
 and weekly rate-limit usage, live context-window fill, and a smart **compact /
 clear** recommendation — all in one glance.
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+![Python 3.9.6+](https://img.shields.io/badge/python-3.9%2B-blue)
 ![stdlib only](https://img.shields.io/badge/dependencies-stdlib%20only-brightgreen)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
@@ -47,7 +47,7 @@ Open Claude.ai
 
 - macOS 13 or later
 - [SwiftBar](https://swiftbar.app) or [xbar](https://xbarapp.com) (`brew install swiftbar`)
-- Python 3.11+ (`python3 --version`)
+- Python 3.9.6+ (`python3 --version`)
 - [Claude Code](https://code.claude.com) installed and logged in
 
 > **Plan requirement:** The 5-hour and 7-day utilisation data is only returned
@@ -65,7 +65,7 @@ bash install.sh
 ```
 
 The installer will:
-1. Check Python 3.11+ is available
+1. Check Python 3.9.6+ is available
 2. Read and validate your GitHub username from `git config` and patch the plugin
 3. Print the SHA-256 of the source and installed plugin for verification
 4. Only check whether your Claude Code Keychain entry exists (never reads it)

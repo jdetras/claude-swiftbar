@@ -71,8 +71,8 @@ if [[ -z "$PYTHON_BIN" ]]; then
   error "python3 not found. Install with: brew install python"; exit 1
 fi
 PY_VER=$("$PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')")
-if (( PY_VER < 311 )); then
-  error "Python 3.11+ required (found $("$PYTHON_BIN" --version)). Upgrade with: brew upgrade python"
+if (( PY_VER < 39 )); then
+  error "Python 3.9+ required (found $("$PYTHON_BIN" --version)). Upgrade with: brew upgrade python"
   exit 1
 fi
 info "Python $("$PYTHON_BIN" --version)"
