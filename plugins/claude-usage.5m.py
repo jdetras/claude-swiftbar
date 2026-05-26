@@ -34,6 +34,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
@@ -121,7 +122,7 @@ def _cache_path_safe() -> Path | None:
     return CACHE_PATH
 
 
-def load_cache() -> dict | None:
+def load_cache() -> dict[str, Any] | None:
     path = _cache_path_safe()
     if path is None:
         return None
@@ -135,7 +136,7 @@ def load_cache() -> dict | None:
         return None
 
 
-def save_cache(data: dict) -> None:
+def save_cache(data: dict[str, Any]) -> None:
     path = _cache_path_safe()
     if path is None:
         return
@@ -187,7 +188,7 @@ def load_token() -> str | None:
                 .strip()
             )
             token = json.loads(raw).get("claudeAiOauth", {}).get("accessToken")
-            if token:
+            if isinstance(token, str) and token:
                 return token
         except (
             subprocess.CalledProcessError,
@@ -212,7 +213,7 @@ def _parse_retry_after(headers: object) -> int:
     Falls back to RETRY_AFTER_DEFAULT on any parse failure.
     """
     try:
-        raw = headers.get("Retry-After")  # type: ignore[union-attr]
+        raw = headers.get("Retry-After")  # type: ignore[attr-defined]
         if raw is None:
             return RETRY_AFTER_DEFAULT
         value = int(str(raw).strip())
@@ -223,7 +224,7 @@ def _parse_retry_after(headers: object) -> int:
         return RETRY_AFTER_DEFAULT
 
 
-def fetch_usage(token: str) -> tuple[dict | None, str | None]:
+def fetch_usage(token: str) -> tuple[dict[str, Any] | None, str | None]:
     """
     Call the Anthropic OAuth usage endpoint with retry.
     Returns (data, error_string). On success error_string is None.
@@ -280,7 +281,7 @@ def friendly_model(raw: str) -> str:
     return sanitized or "unknown"
 
 
-def parse_latest_session() -> dict | None:
+def parse_latest_session() -> dict[str, Any] | None:
     """
     Find the most-recently-modified Claude Code JSONL session file and extract
     context window and token usage data.
@@ -353,7 +354,7 @@ def parse_latest_session() -> dict | None:
                     # coerce to int defensively — malformed JSONL could have strings
                     def _int(v: object) -> int:
                         try:
-                            return max(0, int(v))  # type: ignore[arg-type]
+                            return max(0, int(v))  # type: ignore[call-overload, no-any-return]
                         except (TypeError, ValueError):
                             return 0
 
@@ -464,9 +465,12 @@ def main() -> None:
     # skip API call if inside a 429 backoff window
     cached_pre = load_cache()
     backoff_until = float((cached_pre or {}).get("backoff_until", 0))
+    data: dict[str, Any] | None
+    api_err: str | None
     if time.time() < backoff_until:
         remaining = round((backoff_until - time.time()) / 60)
-        data, api_err = None, f"rate limited (retry in {remaining}m)"
+        data = None
+        api_err = f"rate limited (retry in {remaining}m)"
     else:
         data, api_err = fetch_usage(token)
 
@@ -487,17 +491,17 @@ def main() -> None:
             print("Will retry on next refresh | size=11 color=gray")
 
 
-def _pct(d: dict, key: str = "utilization") -> int | None:
+def _pct(d: dict[str, Any], key: str = "utilization") -> int | None:
     v = d.get(key)
     try:
-        return round(float(v)) if v is not None else None  # type: ignore[arg-type]
+        return round(float(v)) if v is not None else None
     except (TypeError, ValueError):
         return None
 
 
 def _print_all(
-    data: dict,
-    session: dict | None,
+    data: dict[str, Any],
+    session: dict[str, Any] | None,
     *,
     api_err: str | None,
     stale_ts: str = "",
@@ -561,7 +565,7 @@ def _print_all(
     )
 
 
-def _print_body(state: dict, stale: bool = False) -> None:
+def _print_body(state: dict[str, Any], stale: bool = False) -> None:
     if "data" in state and "s_pct" not in state:
         data = state.get("data") or {}
         session = None
