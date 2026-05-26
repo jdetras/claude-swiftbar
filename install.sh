@@ -10,6 +10,8 @@
 # • Does not install Homebrew, Python, SwiftBar, or xbar.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ── safe PATH ─────────────────────────────────────────────────────────────────
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin"
 
@@ -21,10 +23,11 @@ PGREP_BIN="/usr/bin/pgrep"
 OPEN_BIN="/usr/bin/open"
 MKTEMP_BIN="/usr/bin/mktemp"
 CP_BIN="/bin/cp"
-MV_BIN="/bin/mv"
 RM_BIN="/bin/rm"
 MKDIR_BIN="/bin/mkdir"
 CHMOD_BIN="/bin/chmod"
+LN_BIN="/bin/ln"
+READLINK_BIN="/usr/bin/readlink"
 
 # python3 may come from Homebrew — resolve via PATH
 if ! PYTHON_BIN="$(command -v python3 2>/dev/null)"; then
@@ -49,15 +52,6 @@ info()    { printf "  ${GREEN}✔${RESET}  %s\n" "$*"; }
 warn()    { printf "  ${YELLOW}⚠${RESET}  %s\n" "$*"; }
 error()   { printf "  ${RED}✖${RESET}  %s\n" "$*" >&2; }
 heading() { printf "\n${BOLD}%s${RESET}\n" "$*"; }
-
-# ── temp file cleanup ─────────────────────────────────────────────────────────
-PLUGIN_DEST_TMP=""
-cleanup() {
-  if [[ -n "$PLUGIN_DEST_TMP" && -f "$PLUGIN_DEST_TMP" ]]; then
-    "$RM_BIN" -f "$PLUGIN_DEST_TMP"
-  fi
-}
-trap cleanup EXIT INT TERM
 
 # ── preflight ─────────────────────────────────────────────────────────────────
 heading "Checking prerequisites"
@@ -85,7 +79,7 @@ info "Plugin file found"
 
 SRC_HASH=$("$SHASUM_BIN" -a 256 "$PLUGIN_SRC" | "$AWK_BIN" '{print $1}')
 printf "  Source SHA-256 : %s\n" "$SRC_HASH"
-printf "  This installer will copy and make the local plugin executable.\n"
+printf "  This installer creates a symlink — git pull will update the running plugin.\n"
 printf "  No remote code is downloaded.\n"
 
 # ── resolve GitHub identity from git config ───────────────────────────────────
@@ -123,36 +117,39 @@ else
   warn "git user.email not set — security contact will be omitted from SECURITY.md"
 fi
 
-# ── patch plugin with real identity ───────────────────────────────────────────
+# ── patch plugin source with real identity ────────────────────────────────────
 heading "Configuring plugin"
 
-PLUGIN_DEST_TMP=$("$MKTEMP_BIN" /tmp/claude-usage.XXXXXX.py)
-"$CP_BIN" "$PLUGIN_SRC" "$PLUGIN_DEST_TMP"
-
-if [[ -n "$VALID_GIT_USER" ]]; then
-  REPO_URL="https://github.com/${VALID_GIT_USER}/claude-swiftbar"
-
-  # sed uses | as delimiter; username is validated to [a-zA-Z0-9-] so safe.
-  # macOS sed requires '' after -i; GNU sed does not — try macOS form first.
-  if sed -i '' \
-       -e "s|yourusername|${VALID_GIT_USER}|g" \
-       -e "s|https://github.com/yourusername/claude-swiftbar|${REPO_URL}|g" \
-       "$PLUGIN_DEST_TMP" 2>/dev/null; then
-    : # macOS sed succeeded
+# Patch is applied directly to the source file so the symlink picks it up.
+# Only runs if the placeholder is still present (i.e. a fresh clone/fork).
+if grep -q 'yourusername' "$PLUGIN_SRC" 2>/dev/null; then
+  if [[ -n "$VALID_GIT_USER" ]]; then
+    REPO_URL="https://github.com/${VALID_GIT_USER}/claude-swiftbar"
+    PATCH_TMP=$("$MKTEMP_BIN" /tmp/claude-usage.XXXXXX.py)
+    "$CP_BIN" "$PLUGIN_SRC" "$PATCH_TMP"
+    # sed uses | as delimiter; username is validated to [a-zA-Z0-9-] so safe.
+    # macOS sed requires '' after -i; GNU sed does not — try macOS form first.
+    if sed -i '' \
+         -e "s|yourusername|${VALID_GIT_USER}|g" \
+         -e "s|https://github.com/yourusername/claude-swiftbar|${REPO_URL}|g" \
+         "$PATCH_TMP" 2>/dev/null; then
+      : # macOS sed succeeded
+    else
+      sed -i \
+        -e "s|yourusername|${VALID_GIT_USER}|g" \
+        -e "s|https://github.com/yourusername/claude-swiftbar|${REPO_URL}|g" \
+        "$PATCH_TMP"
+    fi
+    "$CP_BIN" "$PATCH_TMP" "$PLUGIN_SRC"
+    "$RM_BIN" -f "$PATCH_TMP"
+    info "Repo links set to $REPO_URL"
   else
-    sed -i \
-      -e "s|yourusername|${VALID_GIT_USER}|g" \
-      -e "s|https://github.com/yourusername/claude-swiftbar|${REPO_URL}|g" \
-      "$PLUGIN_DEST_TMP"
+    warn "yourusername placeholder found but no valid github.user configured"
+    warn "Set it with: git config --global github.user YOUR_GITHUB_USERNAME"
+    warn "Then re-run install.sh to patch the source file."
   fi
-  info "Repo links set to $REPO_URL"
 else
-  # Remove only the specific lines that print the placeholder repo URL,
-  # leaving all other lines intact.
-  PATCHED=$("$MKTEMP_BIN" /tmp/claude-usage.XXXXXX.py)
-  grep -v 'yourusername/claude-swiftbar' "$PLUGIN_DEST_TMP" > "$PATCHED" || true
-  "$MV_BIN" "$PATCHED" "$PLUGIN_DEST_TMP"
-  info "Repo links omitted (no valid github.user configured)"
+  info "Plugin source already configured"
 fi
 
 # ── Keychain check ────────────────────────────────────────────────────────────
@@ -214,31 +211,35 @@ fi
 "$MKDIR_BIN" -p "$PLUGINS_DIR"
 info "Using $APP_NAME plugins folder: $PLUGINS_DIR"
 
-# ── install plugin ────────────────────────────────────────────────────────────
+# ── install plugin (symlink) ──────────────────────────────────────────────────
 heading "Installing plugin"
 
+PLUGIN_ABS="$SCRIPT_DIR/$PLUGIN_SRC"
 DEST="$PLUGINS_DIR/$PLUGIN_FILENAME"
 
-# refuse to overwrite a symlink
 if [[ -L "$DEST" ]]; then
-  error "Destination is a symlink: $DEST"
-  error "Remove or replace the symlink manually before installing."; exit 1
+  existing_target=$("$READLINK_BIN" "$DEST")
+  if [[ "$existing_target" == "$PLUGIN_ABS" ]]; then
+    info "Symlink already up to date — reinstalling"
+  else
+    warn "Replacing existing symlink (was: $existing_target)"
+  fi
+elif [[ -f "$DEST" ]]; then
+  warn "Replacing existing plugin copy with a symlink."
+  warn "After this, git pull in the repo updates the running plugin automatically."
+  "$RM_BIN" -f "$DEST"
 fi
 
-# atomic install: temp file inside destination dir → rename into place
-INSTALL_TMP=$("$MKTEMP_BIN" "$PLUGINS_DIR/.claude-usage-tmp.XXXXXX")
-"$CP_BIN" "$PLUGIN_DEST_TMP" "$INSTALL_TMP"
-"$CHMOD_BIN" +x "$INSTALL_TMP"     # set executable before it becomes visible
-"$MV_BIN" "$INSTALL_TMP" "$DEST"   # atomic rename
+"$CHMOD_BIN" +x "$PLUGIN_ABS"
+"$LN_BIN" -sf "$PLUGIN_ABS" "$DEST"
 
-info "Plugin installed: $DEST"
+info "Symlink installed:"
+info "  $DEST -> $PLUGIN_ABS"
 
-SRC_HASH=$("$SHASUM_BIN" -a 256 "$PLUGIN_SRC" | "$AWK_BIN" '{print $1}')
-DEST_HASH=$("$SHASUM_BIN" -a 256 "$DEST"       | "$AWK_BIN" '{print $1}')
+SRC_HASH=$("$SHASUM_BIN" -a 256 "$PLUGIN_ABS" | "$AWK_BIN" '{print $1}')
 printf "\n"
-printf "  Source SHA-256   : %s\n" "$SRC_HASH"
-printf "  Installed SHA-256: %s\n" "$DEST_HASH"
-printf "  Compare these against the release notes to verify the file.\n"
+printf "  Plugin SHA-256: %s\n" "$SRC_HASH"
+printf "  To update: git pull inside the repository folder.\n"
 
 # ── reload ────────────────────────────────────────────────────────────────────
 heading "Reloading $APP_NAME"
@@ -253,4 +254,5 @@ fi
 printf "\n"
 printf "${BOLD}${GREEN}Done!${RESET} Look for 🤖 in your menu bar.\n"
 printf "  Refreshes every 5 minutes. Click 🤖 → Refresh to poll immediately.\n"
+printf "  Update any time: git pull (in the repository folder).\n"
 printf "\n"
