@@ -65,8 +65,8 @@ jobs:
           import ast, sys, pathlib
 
           STDLIB_ALLOWED = {
-              "glob", "json", "os", "re", "stat", "subprocess", "tempfile",
-              "time", "unicodedata", "urllib", "datetime", "sys", "types",
+              "__future__", "glob", "json", "os", "re", "stat", "subprocess", "tempfile",
+              "time", "typing", "unicodedata", "urllib", "datetime", "sys", "types",
               "importlib", "pathlib",
               "pytest",   # test-only
           }
