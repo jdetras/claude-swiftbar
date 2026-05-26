@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Pre-push hook — mirrors all CI checks so failures are caught locally.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "==> ruff lint"
+ruff check plugins/ tests/
+
+echo "==> ruff format"
+ruff format --check plugins/ tests/
+
+echo "==> mypy"
+mypy plugins/claude-usage.5m.py --ignore-missing-imports --strict
+
+echo "==> bandit"
+bandit -r plugins/ -ll -ii -q
+
+echo "==> secret scan"
+if grep -rn --include='*.py' \
+    -e 'sk-ant-' \
+    -e 'Bearer sk-' \
+    -e 'accessToken.*=.*"sk' \
+    plugins/ tests/; then
+    echo "FAIL: possible hardcoded secret detected"
+    exit 1
+fi
+
+echo "==> third-party import check"
+python3 - << 'PYEOF'
+import ast, sys, pathlib
+
+STDLIB_ALLOWED = {
+    "__future__", "glob", "json", "os", "re", "stat", "subprocess", "tempfile",
+    "time", "typing", "unicodedata", "urllib", "datetime", "sys", "types",
+    "importlib", "pathlib",
+    "pytest",   # test-only
+}
+
+src = pathlib.Path("plugins/claude-usage.5m.py").read_text()
+tree = ast.parse(src)
+violations = []
+for node in ast.walk(tree):
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        names = (
+            [alias.name for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [node.module]
+        )
+        for name in names:
+            top = (name or "").split(".")[0]
+            if top and top not in STDLIB_ALLOWED:
+                violations.append(top)
+if violations:
+    print("Third-party imports found:", violations)
+    sys.exit(1)
+print("Import check passed — stdlib only.")
+PYEOF
+
+echo "==> install.sh: absolute tool paths"
+if grep -n '^\s*security ' install.sh; then
+    echo "FAIL: bare 'security' command found in install.sh"
+    exit 1
+fi
+
+echo "==> install.sh: no echo -e"
+if grep -n 'echo -e' install.sh; then
+    echo "FAIL: echo -e found in install.sh"
+    exit 1
+fi
+
+echo "==> shellcheck"
+if command -v shellcheck &>/dev/null; then
+    shellcheck -S warning install.sh
+else
+    echo "shellcheck not installed — skipping"
+fi
+
+echo "==> pytest"
+python -m pytest tests/ -q
+
+echo ""
+echo "All checks passed."

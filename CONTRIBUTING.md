@@ -19,7 +19,12 @@ Thank you for considering a contribution!
 git clone https://github.com/jdetras/claude-swiftbar.git
 cd claude-swiftbar
 pip install pytest ruff mypy bandit  # Python 3.9.6+ required
+
+# Wire up the pre-push hook (one-time per clone)
+git config core.hooksPath .githooks
 ```
+
+The hook runs the full CI suite before every `git push` and blocks if anything fails.
 
 ## Running checks locally
 
@@ -38,7 +43,7 @@ mypy plugins/claude-usage.5m.py --ignore-missing-imports --strict
 bandit -r plugins/ -ll -ii
 ```
 
-All four must pass before CI will go green.
+All checks must pass before CI will go green (the pre-push hook enforces this automatically).
 
 ## Submitting a PR
 
