@@ -9,8 +9,9 @@ A macOS SwiftBar / xbar menu bar plugin (`plugins/claude-usage.5m.py`) that disp
 ## Commands
 
 ```bash
-# Install dev tools (one-time)
+# Install dev tools and activate the pre-push hook (one-time per clone)
 pip install pytest ruff mypy bandit
+git config core.hooksPath .githooks
 
 # Run all tests
 python -m pytest tests/ -v
@@ -46,7 +47,7 @@ bandit -r plugins/ -ll -ii
 
 **Testing approach:** `tests/test_plugin.py` imports the plugin by `exec()`-ing the source into a module to avoid executing `main()`. All tests exercise pure functions; no network or Keychain calls. CI runs on Python 3.11, 3.12, and 3.13 on macOS.
 
-**CI checks** (`.github/workflows/ci.yml`): ruff lint, ruff format, mypy strict, bandit, hardcoded-secret grep, third-party import AST check, install.sh absolute-path check, shellcheck.
+**CI checks** (`.github/workflows/ci.yml`): ruff lint, ruff format, mypy strict, bandit, hardcoded-secret grep, third-party import AST check, install.sh absolute-path check, shellcheck. All checks are mirrored in `.githooks/pre-push`, which runs automatically before every `git push` once `git config core.hooksPath .githooks` is set.
 
 ## Key constraints to preserve
 
@@ -55,4 +56,4 @@ bandit -r plugins/ -ll -ii
 - **All untrusted text must pass through `safe_menu_text()`** before being printed to menu output, to prevent xbar pipe-injection, control characters, and excessively long strings.
 - **`SECURITY_BIN = "/usr/bin/security"`** — always use this constant (absolute path, `shell=False`) for Keychain access.
 - **Line length:** 100 characters (`pyproject.toml`).
-- **Target:** Python 3.9+ syntax and semantics (mypy `python_version = "3.9"`, ruff `target-version = "py39"`).
+- **Runtime target:** Python 3.9.6+ (ruff `target-version = "py39"` enforces this). mypy uses `python_version = "3.10"` because mypy dropped 3.9 target support — this does not change the runtime requirement.
