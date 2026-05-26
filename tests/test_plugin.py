@@ -630,7 +630,7 @@ class TestBackoff:
             raise Fake429()
 
         monkeypatch.setattr(_mod.urllib.request, "urlopen", _raise_fake429)
-        data, err = _mod.fetch_usage("sk-ant-" + "fake")
+        data, err = _mod.fetch_usage("fake-test-token")
         assert data is None
         assert "rate limited" in (err or "")
         cached = load_cache()
@@ -656,7 +656,7 @@ class TestBackoff:
             return {}, None
 
         monkeypatch.setattr(_mod, "fetch_usage", _fake_fetch_noop)
-        monkeypatch.setattr(_mod, "load_token", lambda: "sk-ant-" + "fake")
+        monkeypatch.setattr(_mod, "load_token", lambda: "fake-test-token")
         monkeypatch.setattr(_mod, "parse_latest_session", lambda: None)
         monkeypatch.setattr(_mod, "_print_all", lambda *a, **kw: None)
         _mod.main()
@@ -672,7 +672,7 @@ class TestBackoff:
             return {"five_hour": {}}, None
 
         monkeypatch.setattr(_mod, "fetch_usage", _fake_fetch_called)
-        monkeypatch.setattr(_mod, "load_token", lambda: "sk-ant-" + "fake")
+        monkeypatch.setattr(_mod, "load_token", lambda: "fake-test-token")
         monkeypatch.setattr(_mod, "parse_latest_session", lambda: None)
         monkeypatch.setattr(_mod, "_print_all", lambda *a, **kw: None)
         monkeypatch.setattr(_mod, "save_cache", lambda d: None)
@@ -696,7 +696,7 @@ class TestBackoff:
             "urlopen",
             lambda *a, **kw: (_ for _ in ()).throw(Fake429NoHeader()),
         )
-        _, err = _mod.fetch_usage("sk-ant-" + "fake")
+        _, err = _mod.fetch_usage("fake-test-token")
         cached = load_cache()
         expected_min = time.time() + _mod.RETRY_AFTER_DEFAULT - 5
         assert cached["backoff_until"] >= expected_min
