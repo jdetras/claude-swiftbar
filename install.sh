@@ -159,7 +159,7 @@ fi
 heading "Verifying Claude Code credentials"
 
 # Only checks presence of the Keychain item — does not read or print contents.
-if "$SECURITY_BIN" find-generic-password -s "$KEYCHAIN_SERVICE" -l &>/dev/null; then
+if "$SECURITY_BIN" find-generic-password -s "$KEYCHAIN_SERVICE" &>/dev/null; then
   info "Keychain entry found: \"$KEYCHAIN_SERVICE\""
 else
   warn "Keychain entry \"$KEYCHAIN_SERVICE\" not found"

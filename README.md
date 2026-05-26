@@ -135,7 +135,7 @@ Quick summary:
 
 ```bash
 # Verify the Keychain entry exists (presence check only — does not print contents)
-/usr/bin/security find-generic-password -s "Claude Code-credentials" -l
+/usr/bin/security find-generic-password -s "Claude Code-credentials"
 ```
 
 If the entry is absent: `claude auth login`
